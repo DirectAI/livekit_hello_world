@@ -14,7 +14,7 @@ We will open a browser using LiveKit's [meet](https://meet.livekit.io) product a
 - Run `pip install -r requirements.txt` in your environment (e.g. conda, venv) of choice.
 
 ## Running It
-Run `python stream_script.py` to start a LiveKit room and get started with object tracking. If you included a token in `LIVEKIT_TOKEN_FOR_RESULTS`, you'll also see 
+Run `python stream_script.py` to start a LiveKit room and get started with object tracking. If you included a token in `LIVEKIT_TOKEN_FOR_RESULTS`, you'll also see real-time object tracking results returned to the client via WebRTC data channels, along with a measure of latency from DirectAI's backend receiving the frame from LiveKit to the client receiving the tracked object results. We would expect this latency to be <200ms.
 
 ## Stopping It
 Just press CTRL-C to stop the process!
