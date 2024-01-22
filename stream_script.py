@@ -10,13 +10,12 @@ load_dotenv()
 
 LIVEKIT_TOKEN_FOR_DIRECTAI = os.getenv("LIVEKIT_TOKEN_FOR_DIRECTAI")
 LIVEKIT_TOKEN_FOR_USER = os.getenv("LIVEKIT_TOKEN_FOR_USER")
-LIVEKIT_TOKEN_FOR_RESULTS = os.getenv("LIVEKIT_TOKEN_FOR_RESULTS", None)
+LIVEKIT_TOKEN_FOR_RESULTS = os.getenv("LIVEKIT_TOKEN_FOR_RESULTS", '')
 LIVEKIT_WS_URL = os.getenv("LIVEKIT_WS_URL")
 DIRECTAI_CLIENT_ID = os.getenv("DIRECTAI_CLIENT_ID")
 DIRECTAI_CLIENT_SECRET = os.getenv("DIRECTAI_CLIENT_SECRET")
 
-# DIRECTAI_BASE_URL = "https://api.free.directai.io"
-DIRECTAI_BASE_URL = "http://100.66.146.61:8000"
+DIRECTAI_BASE_URL = "https://api.free.directai.io"
 
 
 def assemble_webrtc_config():
@@ -103,7 +102,7 @@ def assemble_webrtc_config():
     }
     
     webrtc_stream_tracker_config = {
-        "return_via_data_channel": LIVEKIT_TOKEN_FOR_RESULTS is not None,
+        "return_via_data_channel": LIVEKIT_TOKEN_FOR_RESULTS != '',
         "webhook_url": None,
         "webrtc_url": LIVEKIT_WS_URL,
         "token": LIVEKIT_TOKEN_FOR_DIRECTAI,
@@ -154,7 +153,7 @@ async def main():
     result_pipe = None
     
     try:
-        if LIVEKIT_TOKEN_FOR_RESULTS is not None:
+        if LIVEKIT_TOKEN_FOR_RESULTS != '':
             # only create livekit dependency if we need it
             from result_pipe import ResultPipe, connect_to_room
             
