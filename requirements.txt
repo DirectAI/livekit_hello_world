@@ -1,2 +1,4 @@
 python-dotenv==1.0.0
 requests==2.31.0
+livekit==0.7.1
+livekit-api==0.4.1

@@ -3,17 +3,20 @@ import requests
 import webbrowser
 from dotenv import load_dotenv
 import time
+import asyncio
 
 load_dotenv()
 
 
 LIVEKIT_TOKEN_FOR_DIRECTAI = os.getenv("LIVEKIT_TOKEN_FOR_DIRECTAI")
 LIVEKIT_TOKEN_FOR_USER = os.getenv("LIVEKIT_TOKEN_FOR_USER")
+LIVEKIT_TOKEN_FOR_RESULTS = os.getenv("LIVEKIT_TOKEN_FOR_RESULTS", None)
 LIVEKIT_WS_URL = os.getenv("LIVEKIT_WS_URL")
 DIRECTAI_CLIENT_ID = os.getenv("DIRECTAI_CLIENT_ID")
 DIRECTAI_CLIENT_SECRET = os.getenv("DIRECTAI_CLIENT_SECRET")
 
-DIRECTAI_BASE_URL = "https://api.free.directai.io"
+# DIRECTAI_BASE_URL = "https://api.free.directai.io"
+DIRECTAI_BASE_URL = "http://100.66.146.61:8000"
 
 
 def assemble_webrtc_config():
@@ -100,11 +103,12 @@ def assemble_webrtc_config():
     }
     
     webrtc_stream_tracker_config = {
-        # you can add a webhook_url to get a POST request with detections
-        "webhook_url": "fake_webhook_url",
+        "return_via_data_channel": LIVEKIT_TOKEN_FOR_RESULTS is not None,
+        "webhook_url": None,
         "webrtc_url": LIVEKIT_WS_URL,
         "token": LIVEKIT_TOKEN_FOR_DIRECTAI,
         "tracker_config": tracker_config,
+        "timeout": 5,
     }
     
     return webrtc_stream_tracker_config
@@ -123,7 +127,7 @@ def get_directai_access_token(
     return response.json()["access_token"]
 
 
-def main():
+async def main():
     directai_access_token = get_directai_access_token(
         DIRECTAI_CLIENT_ID,
         DIRECTAI_CLIENT_SECRET
@@ -146,16 +150,38 @@ def main():
     response = resp.json()
     print(response)
     tracker_id = response['tracker_instance_id']
+    
+    result_pipe = None
+    
     try:
+        if LIVEKIT_TOKEN_FOR_RESULTS is not None:
+            # only create livekit dependency if we need it
+            from result_pipe import ResultPipe, connect_to_room
+            
+            room = await connect_to_room(LIVEKIT_WS_URL, LIVEKIT_TOKEN_FOR_RESULTS)
+            result_pipe = ResultPipe(room)
+    
         print("Press CTRL-C to stop stream.")
         while True:
-            time.sleep(.1)
-    except KeyboardInterrupt:
+            await asyncio.sleep(0.1)
+            
+    except asyncio.CancelledError:
+        print("Stopping stream inference...")
         stop_livekit_tracker_endpoint = DIRECTAI_BASE_URL + "/stop_tracker"
         resp = requests.post(stop_livekit_tracker_endpoint, params={"tracker_instance_id": tracker_id}, headers=headers)
         if "OK" in resp.text:
             print("Stream inference stopped successfully.")
+        else:
+            print("Stream inference did not stop successfully.")
+            print(resp.text)
+            
+        if result_pipe is not None:
+            result_pipe.close()
+            await room.disconnect()
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Done.")
