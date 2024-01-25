@@ -4,6 +4,7 @@ import webbrowser
 from dotenv import load_dotenv
 import time
 import asyncio
+import sys
 
 load_dotenv()
 
@@ -17,8 +18,10 @@ DIRECTAI_CLIENT_SECRET = os.getenv("DIRECTAI_CLIENT_SECRET")
 
 DIRECTAI_BASE_URL = "https://api.free.directai.io"
 
+REBROADCAST_ANNOTATIONS = True
 
-def assemble_webrtc_config():
+
+def assemble_tracker_webrtc_config():
     ### TO MODIFY AS YOU WISH ###
     ### Add more detectors, add more things to include/exclude ###
     ## There are optional threshold parameters in the tracker config as well ##
@@ -82,7 +85,7 @@ def assemble_webrtc_config():
         "detectors": detector_configs,
         
         # whether or not to rebroadcast detections as annotations
-        "rebroadcast_annotations": True,
+        "rebroadcast_annotations": REBROADCAST_ANNOTATIONS,
         
         # these control how much a new detection must match a track to be considered a match
         # higher means more nonlinear motion is allowed, but more false positives
@@ -103,15 +106,80 @@ def assemble_webrtc_config():
     
     webrtc_stream_tracker_config = {
         "return_via_data_channel": LIVEKIT_TOKEN_FOR_RESULTS != '',
-        "webhook_url": None,
+        "tracker_config": tracker_config,
+        "webhook_url": "",
         "webrtc_url": LIVEKIT_WS_URL,
         "token": LIVEKIT_TOKEN_FOR_DIRECTAI,
-        "tracker_config": tracker_config,
         "timeout": 5,
     }
     
     return webrtc_stream_tracker_config
 
+
+def assemble_classifier_webrtc_config(headers):
+    ### TO MODIFY AS YOU WISH ###
+    ### Add more classes, add more things to include/exclude ###
+    
+    config = {
+        "classifier_configs": [
+            {
+                "name": "happy",
+                "examples_to_include": [
+                    "happy person", "happy", "person who is happy", "person smiling", "feeling happy"
+                ],
+                "examples_to_exclude": []
+            },
+            {
+                "name": "sad",
+                "examples_to_include": [
+                    "sad person", "sad", "person who is sad", "person frowning", "person crying", "upset person", "feeling sad"
+                ]
+            },
+            {
+                "name": "angry",
+                "examples_to_include": [
+                    "angry person", "angry", "person who is angry", "feeling angry"
+                ]
+            },
+            {
+                "name": "scared",
+                "examples_to_include": [
+                    "scared person", "scared", "person who is scared", "fearful person", "fearful", "person who is fearful", "feeling scared"
+                ]
+            },
+            {
+                "name": "neutral",
+                "examples_to_include": [
+                    "person showing no emotion", "emotionless person", "person with a blank expression", "person with no expression"
+                ],
+                "examples_to_exclude": [
+                    "person showing emotion", "facial expression", "person expressing emotion", "emotional person", "emotion"
+                ]
+            }
+        ]
+    }
+    
+    response = requests.post(
+        DIRECTAI_BASE_URL + "/deploy_classifier",
+        json=config,
+        headers=headers
+    )
+    
+    deployed_id = response.json()["deployed_id"]
+    print(f"Deployed ID for classifier: {deployed_id}")
+    
+    webrtc_stream_tracker_config = {
+        "return_via_data_channel": LIVEKIT_TOKEN_FOR_RESULTS != '',
+        "webhook_url": "",
+        "webrtc_url": LIVEKIT_WS_URL,
+        "token": LIVEKIT_TOKEN_FOR_DIRECTAI,
+        "deployed_id": deployed_id,
+        "timeout": 5,
+        "rebroadcast_annotations": REBROADCAST_ANNOTATIONS,
+    }
+    
+    return webrtc_stream_tracker_config
+    
 
 def get_directai_access_token(
     client_id,
@@ -126,29 +194,60 @@ def get_directai_access_token(
     return response.json()["access_token"]
 
 
-async def main():
+def start_classifier():
     directai_access_token = get_directai_access_token(
         DIRECTAI_CLIENT_ID,
         DIRECTAI_CLIENT_SECRET
     )
-
-    streaming_url = "https://meet.livekit.io/custom?liveKitUrl={}&token={}".format(
-        LIVEKIT_WS_URL,
-        LIVEKIT_TOKEN_FOR_USER
-    )
-    webbrowser.open(streaming_url)
     
     headers = {
         'Authorization': directai_access_token,
         'Content-Type': 'application/json'
     }
-    webrtc_config = assemble_webrtc_config()
+    webrtc_config = assemble_classifier_webrtc_config(headers)
+    
+    run_livekit_tracker_endpoint = DIRECTAI_BASE_URL + "/run_classifier_on_livekit_stream"
+    resp = requests.post(run_livekit_tracker_endpoint, json=webrtc_config, headers=headers)
+    response = resp.json()
+    print(response)
+    tracker_id = response['tracker_instance_id']
+    
+    return tracker_id, headers
+
+
+def start_tracker():
+    directai_access_token = get_directai_access_token(
+        DIRECTAI_CLIENT_ID,
+        DIRECTAI_CLIENT_SECRET
+    )
+    
+    headers = {
+        'Authorization': directai_access_token,
+        'Content-Type': 'application/json'
+    }
+    webrtc_config = assemble_tracker_webrtc_config()
     
     run_livekit_tracker_endpoint = DIRECTAI_BASE_URL + "/run_tracker_on_livekit_stream"
     resp = requests.post(run_livekit_tracker_endpoint, json=webrtc_config, headers=headers)
     response = resp.json()
     print(response)
     tracker_id = response['tracker_instance_id']
+    
+    return tracker_id, headers
+
+
+async def main():
+    streaming_url = "https://meet.livekit.io/custom?liveKitUrl={}&token={}".format(
+        LIVEKIT_WS_URL,
+        LIVEKIT_TOKEN_FOR_USER
+    )
+    webbrowser.open(streaming_url)
+    
+    mode = sys.argv[1] if len(sys.argv) > 1 else 'tracker'
+    assert mode in ['tracker', 'classifier'], "Mode must be either 'tracker' or 'classifier'"
+    print(f"Running in {mode} mode.")
+    
+    tracker_id, headers = start_tracker() if mode == 'tracker' else start_classifier()
     
     result_pipe = None
     

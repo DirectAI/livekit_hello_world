@@ -15,7 +15,10 @@ We will open a browser using LiveKit's [meet](https://meet.livekit.io) product a
 - Run `pip install -r requirements.txt` in your environment (e.g. conda, venv) of choice.
 
 ## Running It
-Run `python stream_script.py` to start a LiveKit room and get started with object tracking. If you include a token in LIVEKIT_TOKEN_FOR_RESULTS, you'll see printed in the terminal real-time object tracking results returned to the client via WebRTC data channels. In addition, you'll see a measure of latency from when DirectAI received the frame from LiveKit to when the client received the tracking results from the data channel. We would expect this latency to be <200ms.
+- Run `python stream_script.py tracker` to start a LiveKit room and get started with object tracking. If you include a token in LIVEKIT_TOKEN_FOR_RESULTS, you'll see printed in the terminal real-time object tracking results returned to the client via WebRTC data channels. In addition, you'll see a measure of latency from when DirectAI received the frame from LiveKit to when the client received the tracking results from the data channel. We would expect this latency to be <200ms if `rebroadcast_annotations = False`, and <500ms otherwise.
+- Alternatively, you can run `python stream_script.py classifier` to get started with classification. By default, this will run a sentiment analysis model, with a configuration you can see in the code. The latency for the classifier should be less.
+- Feel free to modify the objects / classes / configurations as you wish! Experiment with it and see what it can do :)
+- Note that the predictions of the model will get worse as image quality decreases. For LiveKit, a worse internet connection will mean lower quality streams, which will therefore mean lower quality model results. So a better internet connection will yield better results!
 
 ## Stopping It
 Just press CTRL-C to stop the process!
